@@ -304,8 +304,14 @@
         chatState.hasBeenOpened = true;
 
         if (chatState.sessionId) {
-          await loadExistingSession();
+          // Try to load session, but only create new session if loading fails
+          const loaded = await loadExistingSession();
+          if (!loaded) {
+            await createChatSession();
+            setTimeout(() => addMessage(CONFIG.WELCOME_MESSAGE, "bot"), 300);
+          }
         } else {
+          await createChatSession();
           setTimeout(() => addMessage(CONFIG.WELCOME_MESSAGE, "bot"), 300);
         }
       }
@@ -384,7 +390,7 @@
   }
 
   async function loadExistingSession() {
-    if (!chatState.sessionId || chatState.isLoadingHistory) return;
+    if (!chatState.sessionId || chatState.isLoadingHistory) return false;
 
     chatState.isLoadingHistory = true;
     const typingIndicator = showTypingIndicator();
@@ -397,22 +403,19 @@
       const response = await fetch(url);
       if (!response.ok) {
         if (response.status === 404) {
-          console.warn("Session ID not found on server, starting new session.");
           localStorage.removeItem(CONFIG.LOCAL_STORAGE_KEY);
           chatState.sessionId = null;
-          addMessage(CONFIG.WELCOME_MESSAGE, "bot");
+          return false;
         }
         throw new Error(`Failed to fetch session: ${response.status}`);
       }
 
       const sessionData = await response.json();
-
       renderSessionHistory(sessionData.messages);
+      return true;
     } catch (error) {
-      console.error(" Error loading session history:", error);
-      if (chatState.sessionId) {
-        addMessage("Could not load previous conversation.", "bot");
-      }
+      console.error("Error loading session history:", error);
+      return false;
     } finally {
       typingIndicator.remove();
       chatState.isLoadingHistory = false;
@@ -497,12 +500,12 @@
 
       // Construct correct payload for API
       const payload = {
-        chatSessionId: parseInt(chatState.sessionId), // sessionId from createChatSession
-        senderId: 1, // replace with logged-in user ID if available
-        senderType: 1, // 1 = user, 2 = bot (match your enum)
-        message: text, // actual message
-        messageType: 1, // e.g. 1 = text, 2 = attachment
-        visibleTo: 0, // define your logic (maybe receiverId / agentId)
+        chatSessionId: parseInt(chatState.sessionId),
+        senderId: 1,
+        senderType: 1,
+        message: text,
+        messageType: 1,
+        visibleTo: 0,
         isDeleted: false,
       };
 
