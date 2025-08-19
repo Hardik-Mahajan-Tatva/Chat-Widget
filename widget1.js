@@ -252,7 +252,7 @@
     LOCAL_STORAGE_KEY: "mychat_session_id",
   };
   CONFIG.API_SESSION_URL = `${CONFIG.API_BASE_URL}/api/ChatSession/sessions`;
-  CONFIG.API_SESSION_GET_URL_TEMPLATE = `${CONFIG.API_BASE_URL}/api/chat/sessions/{sessionId}`;
+  CONFIG.API_SESSION_GET_URL_TEMPLATE = `${CONFIG.API_BASE_URL}/api/ChatSession/sessions/{sessionId}`;
   CONFIG.API_MESSAGE_URL_TEMPLATE = `${CONFIG.API_BASE_URL}/api/ChatSession/message`;
 
   const chatState = {
