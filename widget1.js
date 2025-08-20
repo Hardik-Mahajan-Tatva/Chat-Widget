@@ -1,4 +1,6 @@
 (function () {
+  //#region Style
+
   const style = document.createElement("style");
   style.textContent = `
     @keyframes pulse {
@@ -239,6 +241,10 @@
   `;
   document.head.appendChild(style);
 
+  //#endregion
+
+  //#region Constants
+
   const ICONS = {
     chat: `<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"></path></svg>`,
     close: `<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>`,
@@ -251,7 +257,7 @@
     WELCOME_MESSAGE: "Hi there! How can we help you today?",
     LOCAL_STORAGE_KEY: "mychat_session_id",
   };
-  CONFIG.API_SESSION_URL = `${CONFIG.API_BASE_URL}/api/ChatSession/sessions`;
+  CONFIG.API_SESSION_URL = `${CONFIG.API_BASE_URL}/api/ChatSession`;
   CONFIG.API_SESSION_GET_URL_TEMPLATE = `${CONFIG.API_BASE_URL}/api/ChatSession/chatSessionId?chatSessionId={sessionId}`;
   CONFIG.API_MESSAGE_URL_TEMPLATE = `${CONFIG.API_BASE_URL}/api/ChatSession/message`;
 
@@ -262,6 +268,10 @@
     isLoadingHistory: false,
   };
   const elements = {};
+
+  //#endregion
+
+  //#region Render
 
   function render() {
     const launcher = document.createElement("div");
@@ -292,6 +302,10 @@
     elements.sendBtn = popup.querySelector("button");
   }
 
+  //#endregion
+
+  //#region Toggle Chat
+
   async function toggleChat(isOpen) {
     chatState.isOpen = isOpen;
     if (isOpen) {
@@ -304,7 +318,6 @@
         chatState.hasBeenOpened = true;
 
         if (chatState.sessionId) {
-          // Try to load session, but only create new session if loading fails
           const loaded = await loadExistingSession();
           if (!loaded) {
             await createChatSession();
@@ -322,9 +335,17 @@
     }
   }
 
+  //#endregion
+
+  //#region Strip Metadata
+
   function stripMetadata(messageText) {
     return messageText.replace(/\n\n\[Browser: .*?, OS: .*?\]$/, "").trim();
   }
+
+  //#endregion
+
+  //#region Get Sender Type
 
   function getSenderType(senderInfo) {
     const ipRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
@@ -334,17 +355,25 @@
     return "bot";
   }
 
+  //#endregion
+
+  //#region RenderSessionHistory
+
   function renderSessionHistory(messages) {
     if (!messages || messages.length === 0) return;
 
     elements.messages.innerHTML = "";
 
     messages.forEach((msg) => {
-      const cleanMessage = stripMetadata(msg.message);
+      const cleanMessage = stripMetadata(msg.chatMessage);
       const senderType = getSenderType(msg.sender);
       addMessage(cleanMessage, senderType);
     });
   }
+
+  //#endregion
+
+  //#region Add Message
 
   function addMessage(text, sender) {
     const messageElement = document.createElement("div");
@@ -357,6 +386,10 @@
     elements.messages.scrollTop = elements.messages.scrollHeight;
   }
 
+  //#endregion
+
+  //#region Show Typing Indicator
+
   function showTypingIndicator() {
     const indicator = document.createElement("div");
     indicator.className = "mychat-message bot typing-indicator";
@@ -366,28 +399,56 @@
     return indicator;
   }
 
-  async function getIpAndLocationInfo() {
+  //#endregion
+
+  //#region Get Ip
+
+  async function getIp() {
     try {
-      const response = await fetch("https://ipapi.co/json/");
+      const response = await fetch("https://ipwhois.app/json/");
       if (!response.ok) throw new Error(`IP API failed: ${response.status}`);
-      return await response.json();
+      const data = await response.json();
+      return {
+        ip: data.ip,
+      };
     } catch (error) {
       console.error("Could not fetch location info:", error);
       return { ip: "N/A", city: "N/A", region: "N/A", country_name: "N/A" };
     }
   }
 
-  function getBrowserInfo() {
-    const ua = navigator.userAgent;
-    let browser = "Unknown";
-    if (ua.includes("Chrome") && !ua.includes("Edg")) browser = "Chrome";
-    else if (ua.includes("Firefox")) browser = "Firefox";
-    else if (ua.includes("Safari") && !ua.includes("Chrome"))
-      browser = "Safari";
-    else if (ua.includes("Edg")) browser = "Edge";
+  //#endregion
 
-    return { browser: browser, platform: navigator.platform };
+  //#region Get Browser Info
+
+  async function getBrowserInfo() {
+    let browser = "Unknown";
+    let platform = navigator.platform;
+
+    if (navigator.userAgentData) {
+      const brands = navigator.userAgentData.brands;
+      const brandNames = brands.map((b) => b.brand);
+
+      if (brandNames.includes("Brave")) browser = "Brave";
+      else if (brandNames.includes("Chromium")) browser = "Chrome";
+      else if (brandNames.includes("Microsoft Edge")) browser = "Edge";
+      else if (brandNames.includes("Firefox")) browser = "Firefox";
+      else if (brandNames.includes("Safari")) browser = "Safari";
+    } else {
+      const ua = navigator.userAgent;
+      if (/Brave/i.test(ua)) browser = "Brave";
+      else if (/Edg/i.test(ua)) browser = "Edge";
+      else if (/Chrome/i.test(ua)) browser = "Chrome";
+      else if (/Firefox/i.test(ua)) browser = "Firefox";
+      else if (/Safari/i.test(ua)) browser = "Safari";
+    }
+
+    return { browser, platform };
   }
+
+  //#endregion
+
+  //#region Load Existing Session
 
   async function loadExistingSession() {
     if (!chatState.sessionId || chatState.isLoadingHistory) return false;
@@ -411,7 +472,8 @@
       }
 
       const sessionData = await response.json();
-      renderSessionHistory(sessionData.messages);
+      console.log(sessionData);
+      renderSessionHistory(sessionData.data);
       return true;
     } catch (error) {
       console.error("Error loading session history:", error);
@@ -422,6 +484,10 @@
     }
   }
 
+  //#endregion
+
+  //#region Create Chat Session
+
   async function createChatSession() {
     const [locationInfo, browserInfo] = await Promise.all([
       getIpAndLocationInfo(),
@@ -430,17 +496,9 @@
 
     const payload = {
       projectId: 2,
-      personId: 1,
-      userId: 1,
-      countryId: 1,
-      hostName: window.location.hostname,
       chatIpAddress: locationInfo.ip,
       operatingSystem: browserInfo.platform,
       browser: browserInfo.browser,
-      chatSessionStatus: 1,
-      isBotAnswered: true,
-      isDeleted: false,
-      createdAt: new Date().toISOString(),
     };
 
     const response = await fetch(CONFIG.API_SESSION_URL, {
@@ -453,12 +511,15 @@
       throw new Error(`Session creation failed: ${response.status}`);
 
     const sessionData = await response.json();
-    console.log(sessionData);
     chatState.sessionId = sessionData.data.affectedId;
     localStorage.setItem(CONFIG.LOCAL_STORAGE_KEY, chatState.sessionId);
 
     console.log(`Chat session created with ID: ${chatState.sessionId}`);
   }
+
+  //#endregion
+
+  //#region Post Message To Session
 
   async function postMessageToSession(payload) {
     if (!chatState.sessionId)
@@ -478,6 +539,10 @@
     console.log("Message sent successfully to backend.");
   }
 
+  //#endregion
+
+  //#region  Handle Send Message
+
   async function handleSendMessage() {
     const text = elements.input.value.trim();
     if (!text) return;
@@ -494,7 +559,7 @@
       }
 
       const [locationInfo, browserInfo] = await Promise.all([
-        getIpAndLocationInfo(),
+        getIp(),
         Promise.resolve(getBrowserInfo()),
       ]);
 
@@ -526,6 +591,10 @@
     }
   }
 
+  //#endregion
+
+  //#region  Bind Events
+
   function bindEvents() {
     elements.launcher.addEventListener("click", () =>
       toggleChat(!chatState.isOpen)
@@ -537,10 +606,16 @@
     });
   }
 
+  //#endregion
+
+  //#region Default
+
   function init() {
     render();
     bindEvents();
   }
 
   document.addEventListener("DOMContentLoaded", init);
+
+  //#endregion
 })();
