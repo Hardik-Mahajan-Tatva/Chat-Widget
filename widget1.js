@@ -256,15 +256,17 @@
     HEADER_TITLE: "Welcome to Support 👋",
     WELCOME_MESSAGE: "Hi there! How can we help you today?",
     LOCAL_STORAGE_KEY: "mychat_session_id",
+    LOCAL_STORAGE_KEY_USER: "mychat_session_id_user",
   };
-  CONFIG.API_SESSION_URL = `${CONFIG.API_BASE_URL}/api/ChatSession`;
-  CONFIG.API_SESSION_GET_URL_TEMPLATE = `${CONFIG.API_BASE_URL}/api/ChatSession/chatSessionId?chatSessionId={sessionId}`;
-  CONFIG.API_MESSAGE_URL_TEMPLATE = `${CONFIG.API_BASE_URL}/api/ChatSession/message`;
+  CONFIG.API_SESSION_URL = `${CONFIG.API_BASE_URL}/api/chat-messages`;
+  CONFIG.API_SESSION_GET_URL_TEMPLATE = `${CONFIG.API_BASE_URL}/api/chat-messages/chatSessionId?chatSessionId={sessionId}`;
+  CONFIG.API_MESSAGE_URL_TEMPLATE = `${CONFIG.API_BASE_URL}/api/chat-messages/message`;
 
   const chatState = {
     isOpen: true,
     hasBeenOpened: false,
     sessionId: localStorage.getItem(CONFIG.LOCAL_STORAGE_KEY) || null,
+    userId: localStorage.getItem(CONFIG.LOCAL_STORAGE_KEY_USER) || null,
     isLoadingHistory: false,
   };
   const elements = {};
@@ -366,7 +368,7 @@
 
     messages.forEach((msg) => {
       const cleanMessage = stripMetadata(msg.chatMessage);
-      const senderType = getSenderType(msg.sender);
+      const senderType = msg.senderType === 1 ? "bot" : "user";
       addMessage(cleanMessage, senderType);
     });
   }
@@ -465,6 +467,7 @@
       if (!response.ok) {
         if (response.status === 404) {
           localStorage.removeItem(CONFIG.LOCAL_STORAGE_KEY);
+          localStorage.removeItem(CONFIG.LOCAL_STORAGE_KEY_USER);
           chatState.sessionId = null;
           return false;
         }
@@ -490,7 +493,7 @@
 
   async function createChatSession() {
     const [locationInfo, browserInfo] = await Promise.all([
-      getIpAndLocationInfo(),
+      getIp(),
       Promise.resolve(getBrowserInfo()),
     ]);
 
@@ -512,7 +515,9 @@
 
     const sessionData = await response.json();
     chatState.sessionId = sessionData.data.affectedId;
+    chatState.userId = sessionData.data.message;
     localStorage.setItem(CONFIG.LOCAL_STORAGE_KEY, chatState.sessionId);
+    localStorage.setItem(CONFIG.LOCAL_STORAGE_KEY_USER, chatState.userId);
 
     console.log(`Chat session created with ID: ${chatState.sessionId}`);
   }
@@ -525,12 +530,16 @@
     if (!chatState.sessionId)
       throw new Error("Cannot send message, no active session ID.");
 
-    const url = CONFIG.API_MESSAGE_URL_TEMPLATE; // no need to replace sessionId here
+    const url = CONFIG.API_MESSAGE_URL_TEMPLATE;
+
+    const formData = new FormData();
+    Object.keys(payload).forEach((key) => {
+      formData.append(key, payload[key]);
+    });
 
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: formData,
     });
 
     if (!response.ok)
@@ -566,8 +575,8 @@
       // Construct correct payload for API
       const payload = {
         chatSessionId: parseInt(chatState.sessionId),
-        senderId: 1,
-        senderType: 1,
+        senderId: parseInt(chatState.userId),
+        senderType: 2,
         message: text,
         messageType: 1,
         visibleTo: 0,
